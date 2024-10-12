@@ -1,0 +1,107 @@
+{
+  "name": "chat-app",
+  "version": "1.0.0",
+  "description": "A chat application with browser history reading capability",
+  "main": "main.js",
+  "author": "Your Name <your@email.com>",
+  "scripts": {
+  "start": "react-scripts start",
+  "build": "react-scripts build",
+  "test": "react-scripts test",
+  "eject": "react-scripts eject",
+  "electron": "electron .",
+  "dev": "concurrently --kill-others \"cross-env PORT=3001 BROWSER=none npm start\" \"wait-on http://localhost:3001 && echo Launching Electron... && electron . || echo Electron failed to launch\"",
+  "electron-dev": "wait-on http://localhost:3001 --timeout 60000 && electron .",
+  "pack": "npm run build && electron-builder --dir",
+  "dist": "npm run build && electron-builder",
+  "postinstall": "electron-builder install-app-deps"
+},
+  "dependencies": {
+    "axios": "^1.7.7",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^7.6.2",
+    "body-parser": "^1.19.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "lucide-react": "^0.428.0",
+    "mongoose": "^6.13.0",
+    "multer": "^1.4.3",
+    "node-fetch": "^2.6.1",
+    "path": "^0.12.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "15.5.7",
+    "electron-builder": "^24.13.3",
+    "electron-is-dev": "^2.0.0",
+    "electron-packager": "^17.1.2",
+    "react-scripts": "^5.0.1",
+    "wait-on": "^5.3.0"
+  },
+  "build": {
+    "appId": "com.yourcompany.chatapp",
+    "productName": "Chat App",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3"
+    ],
+    "forceCodeSigning": false,
+    "extraMetadata": {
+      "main": "./main.js"
+    },
+    "files": [
+      "build/**/*",
+      "node_modules/**/*",
+      "main.js"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    },
+    "extraResources": [
+      {
+        "from": "./build",
+        "to": "build"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.social-networking"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "electronVersion": "15.5.7"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
