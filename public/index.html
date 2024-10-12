@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="root">
+        <div id="login-register-container">
+            <div id="login-container" class="container">
+                <h2>Login</h2>
+                <input id="login-username" placeholder="Username">
+                <input id="login-password" type="password" placeholder="Password">
+                <button id="login-button">Login</button>
+                <p>Don't have an account? <span id="show-register" class="link">Register</span></p>
+            </div>
+
+            <div id="register-container" class="container" style="display: none;">
+                <h2>Register</h2>
+                <input id="register-username" placeholder="Username">
+                <input id="register-password" type="password" placeholder="Password">
+                <input id="register-email" type="email" placeholder="Email">
+                <textarea id="register-bio" placeholder="Bio"></textarea>
+                <button id="register-button">Register</button>
+                <p>Already have an account? <span id="show-login" class="link">Login</span></p>
+            </div>
+        </div>
+
+        <div id="home-container" style="display: none;">
+            <h2>Welcome, <span id="username-display"></span></h2>
+            <p>Points: <span id="points-display">0</span></p>
+            <button id="group-chat-button">Join Group Chat</button>
+            <button id="show-browser-history">Show Browser History</button>
+            <button id="logout-button">Logout</button>
+
+            <h3>Friends</h3>
+            <ul id="friends"></ul>
+
+            <h3>Friend Requests</h3>
+            <ul id="friend-requests"></ul>
+        </div>
+
+        <div id="group-chat-container" class="chat-container" style="display: none;">
+            <h2>Group Chat</h2>
+            <div id="group-messages" class="messages-container"></div>
+            <div class="input-container">
+                <input id="group-message" placeholder="Type a message...">
+                <button id="send-group-message">Send</button>
+            </div>
+            <button id="back-to-home">Back to Home</button>
+        </div>
+
+        <div id="private-chat-container" class="chat-container" style="display: none;">
+            <h2>Private Chat with <span id="private-chat-username"></span></h2>
+            <div id="private-messages" class="messages-container"></div>
+            <div class="input-container">
+                <input id="private-message" placeholder="Type a message...">
+                <button id="send-private-message">Send</button>
+            </div>
+            <button id="back-to-home-private">Back to Home</button>
+        </div>
+
+        <div id="browser-history-container" style="display: none;"></div>
+
+        <div id="user-popup" class="popup" style="display: none;">
+            <div class="popup-content">
+                <span class="close-popup">&times;</span>
+                <h2>User Info</h2>
+                <p id="popup-username"></p>
+                <p id="popup-email"></p>
+                <p id="popup-bio"></p>
+                <button id="add-friend-button">Add Friend</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="App.js"></script>
+</body>
+</html>
