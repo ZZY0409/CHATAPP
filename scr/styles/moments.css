@@ -1,0 +1,196 @@
+.moments-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .new-moment-card {
+    background-color: var(--surface-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px var(--shadow);
+  }
+  
+  .moment-input {
+    width: 100%;
+    min-height: 100px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    resize: vertical;
+  }
+  
+  .moment-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .file-input-wrapper {
+    position: relative;
+  }
+  
+  .hidden-input {
+    display: none;
+  }
+  
+  .file-input-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+  }
+  
+  .visibility-select {
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: var(--surface-color);
+    color: var(--text-color);
+  }
+  
+  .image-preview {
+    margin-top: 12px;
+    position: relative;
+  }
+  
+  .preview-image {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+  }
+  
+  .remove-image {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+  }
+  
+  .moment-card {
+    background-color: var(--surface-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 4px var(--shadow);
+  }
+  
+  .moment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .username {
+    font-weight: 500;
+  }
+  
+  .visibility {
+    opacity: 0.7;
+  }
+  
+  .timestamp {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+  }
+  
+  .moment-content {
+    margin-bottom: 16px;
+    white-space: pre-wrap;
+  }
+  
+  .moment-image {
+    max-width: 100%;
+    border-radius: 8px;
+    margin-top: 12px;
+  }
+  
+  .moment-footer {
+    display: flex;
+    gap: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+  }
+  
+  .action-button {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    color: var(--text-color);
+    padding: 6px 12px;
+  }
+  
+  .comments-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+  }
+  
+  .comment {
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  
+  .comment-user {
+    font-weight: 500;
+    margin-right: 8px;
+  }
+  
+  .new-comment {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  
+  .comment-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+  }
+  
+  .submit-comment {
+    padding: 8px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    color: white;
+  }
+  
+  /* 响应式设计 */
+  @media (max-width: 768px) {
+    .moments-container {
+      padding: 10px;
+    }
+    
+    .moment-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    
+    .action-button {
+      padding: 8px;
+    }
+  }

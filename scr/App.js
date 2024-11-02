@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import BrowserHistory from './BrowserHistory';
-import ChatInterface from './ChatInterface';
-import axios from 'axios';
-
-const { ipcRenderer } = window.require('electron');
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { AlertCircle, CheckCircle, Users, BookOpen } from 'lucide-react';
+import ThemeSwitcher from './components/ThemeSwitcher';
+import ChatInterface from './components/ChatInterface';
+import Moments from './components/Moments';
+import useElectronAPI from './hooks/useElectronAPI';
+import './App.css';
 
 const App = () => {
+  // State management
   const [currentUser, setCurrentUser] = useState(null);
   const [view, setView] = useState('login');
   const [friends, setFriends] = useState([]);
@@ -17,362 +17,521 @@ const App = () => {
   const [userPopup, setUserPopup] = useState({ show: false, user: null });
   const [newFriendUsername, setNewFriendUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [moments, setMoments] = useState([]);
-  const [newMoment, setNewMoment] = useState({ content: '', visibility: 'public', image: null });
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  
+  // Electron API hooks
+  const {
+    login: electronLogin,
+    register: electronRegister,
+    getFriends,
+    getFriendRequests,
+    sendChatMessage,
+    sendPrivateMessage,
+    acceptFriendRequest: electronAcceptFriendRequest,
+    loadPrivateChat,
+    logout: electronLogout,
+    sendFriendRequest: electronSendFriendRequest,
+    getChromeHistory,
+    getUserInfo,
+    onChatMessage,
+    onPrivateMessage,
+    onFriendAdded,
+    onUpdatePoints,
+    onUpdateFriends,
+    onFriendRequest,
+    onUpdateFriendRequests,
+    // 朋友圈相关 API
+    getMoments,
+    createMoment,
+    getMomentComments,
+    createMomentComment
+  } = useElectronAPI();
+
+  // Ref for component mounted state
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    const eventHandlers = {
-      'chat message': (msg) => console.log('Received chat message:', msg),
-      'private message': (msg) => console.log('Received private message:', msg),
-      'friend added': (data) => {
-        console.log('Friend added:', data);
-        setFriends(prevFriends => {
-          const newFriends = Array.isArray(prevFriends) ? [...prevFriends] : [];
-          if (data && !newFriends.includes(data)) {
-            newFriends.push(data);
-          }
-          console.log('Updated friends list:', newFriends);
-          return [...new Set(newFriends)];
-        });
-      },
-      'update points': (newPointsData) => {
-        console.log('Points updated:', newPointsData);
-        if (typeof newPointsData === 'object' && 'points' in newPointsData) {
-          setPoints(newPointsData.points);
-        } else if (typeof newPointsData === 'number') {
-          setPoints(newPointsData);
-        } else {
-          console.error('Invalid points data received:', newPointsData);
-        }
-      },
-      'friend request': (data) => {
-        console.log('Received friend request:', data);
-        if (data.to === currentUser) {
-          setFriendRequests(prevRequests => {
-            return [...new Set([...prevRequests, data.from])];
-          });
-          alert(`You have received a friend request from ${data.from}`);
-        }
-      },
-      'friend request sent': (message) => {
-        setIsLoading(false);
-        alert(message);
-      },
-      'friend request error': (message) => {
-        setIsLoading(false);
-        alert(message);
-      },
-      'update friend requests': ({ username, friendRequests }) => {
-        if (username === currentUser) {
-          setFriendRequests(Array.isArray(friendRequests) ? friendRequests : []);
-        }
-      },
-      'update friends': ({ username, friends }) => {
-        if (username === currentUser) {
-          setFriends([...new Set(friends)]);
-        }
-      },
-    };
-
-    Object.entries(eventHandlers).forEach(([event, handler]) => {
-      ipcRenderer.on(event, (_, ...args) => handler(...args));
-    });
-
     return () => {
-      Object.keys(eventHandlers).forEach(event => {
-        ipcRenderer.removeAllListeners(event);
-      });
+      isMounted.current = false;
     };
-  }, [currentUser]);
+  }, []);
 
-  useEffect(() => {
-    if (currentUser) {
-      setView('home');
-      ipcRenderer.send('get friends', { username: currentUser });
-      ipcRenderer.send('get friend requests', { username: currentUser });
-      fetchMoments();
-    }
-  }, [currentUser]);
-
-  const fetchMoments = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/moments?username=${currentUser}`);
-      setMoments(response.data);
-    } catch (error) {
-      console.error('Error fetching moments:', error);
-    }
-  };
-
-  const createMoment = async () => {
-    try {
-      const formData = new FormData();
-      formData.append('content', newMoment.content);
-      formData.append('visibility', newMoment.visibility);
-      formData.append('username', currentUser);
-      if (newMoment.image) {
-        formData.append('image', newMoment.image);
+  // Notification handler
+  const showNotification = (message, type = 'info') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      if (isMounted.current) {
+        setNotification({ show: false, message: '', type: '' });
       }
-      await axios.post(`${API_URL}/moments`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      setNewMoment({ content: '', visibility: 'public', image: null });
-      fetchMoments();
-    } catch (error) {
-      console.error('Error creating moment:', error);
-    }
+    }, 3000);
   };
 
-  const login = async (username, password) => {
+  // Login handler
+  const handleLogin = async (username, password) => {
     try {
-      console.log('Attempting login:', { username, password });
-      const response = await fetch(`${API_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-      const result = await response.json();
-      console.log('Login result:', result);
-      if (response.ok) {
+      setIsLoading(true);
+      const result = await electronLogin({ username, password });
+      
+      if (result.success) {
         setCurrentUser(username);
-        setFriends(result.user.friends);
-        setPoints(result.user.points);
-        ipcRenderer.send('login', { username });
-        ipcRenderer.send('connect socket', { username });
+        setFriends(result.user?.friends || []);
+        setPoints(result.user?.points || 0);
+        setView('home');
+        showNotification('Login successful', 'success');
       } else {
-        alert(result.message);
+        showNotification(result.message || 'Login failed', 'error');
       }
     } catch (error) {
       console.error('Login error:', error);
-      alert('An error occurred during login. Please try again.');
+      showNotification('An error occurred during login', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const register = async (username, password, email, bio) => {
+  // Register handler
+  const handleRegister = async (formData) => {
     try {
-      console.log('Attempting registration:', { username, email, bio });
-      const response = await fetch(`${API_URL}/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, email, bio }),
-      });
-      const result = await response.json();
-      console.log('Registration result:', result);
-      if (response.ok) {
-        alert(result.message);
+      setIsLoading(true);
+      const result = await electronRegister(formData);
+      
+      if (result.success) {
+        showNotification('Registration successful', 'success');
         setView('login');
       } else {
-        alert(result.message);
+        showNotification(result.message || 'Registration failed', 'error');
       }
     } catch (error) {
-      console.error('Register error:', error);
-      alert('An error occurred during registration. Please try again.');
+      console.error('Registration error:', error);
+      showNotification('An error occurred during registration', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const logout = () => {
+  // Friend request handler
+  const handleSendFriendRequest = async (username) => {
+    if (!username.trim() || friends.includes(username)) {
+      showNotification('Invalid username or already friends', 'error');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await electronSendFriendRequest({ from: currentUser, to: username });
+      showNotification('Friend request sent', 'success');
+      setNewFriendUsername('');
+    } catch (error) {
+      console.error('Friend request error:', error);
+      showNotification('Failed to send friend request', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Accept friend request handler
+  const handleAcceptFriendRequest = async (username) => {
+    try {
+      await electronAcceptFriendRequest({ from: username, to: currentUser });
+      setFriendRequests(prev => prev.filter(request => request !== username));
+      showNotification('Friend request accepted', 'success');
+    } catch (error) {
+      console.error('Accept friend request error:', error);
+      showNotification('Failed to accept friend request', 'error');
+    }
+  };
+
+  // Logout handler
+  const handleLogout = () => {
+    electronLogout({ username: currentUser });
     setCurrentUser(null);
     setFriends([]);
     setFriendRequests([]);
     setPoints(0);
-    ipcRenderer.send('logout', { username: currentUser });
     setView('login');
+    showNotification('Logged out successfully', 'success');
   };
 
-  const sendFriendRequest = (to) => {
-    if (!to.trim() || friends.includes(to)) return;
-    console.log(`Sending friend request from ${currentUser} to ${to}`);
-    setIsLoading(true);
-    ipcRenderer.send('send friend request', { from: currentUser, to });
-    setNewFriendUsername('');
-  };
-
-  const acceptFriendRequest = (from) => {
-    ipcRenderer.send('accept friend request', { from, to: currentUser });
-    setFriendRequests(prevRequests => prevRequests.filter(request => request !== from));
-  };
-
-  const openPrivateChat = (friend) => {
-    setPrivateChatUser(friend);
-    setView('privateChat');
-    ipcRenderer.send('load private chat', { from: currentUser, to: friend });
-  };
-
-  const openUserPopup = async (username) => {
+  // Chat message handler
+  const handleSendMessage = async (messageData) => {
     try {
-      const response = await fetch(`${API_URL}/user/${username}`);
-      if (response.ok) {
-        const userData = await response.json();
-        setUserPopup({ show: true, user: userData });
+      if (messageData.to) {
+        await sendPrivateMessage(messageData);
       } else {
-        throw new Error('Failed to fetch user info');
+        await sendChatMessage(messageData);
       }
     } catch (error) {
-      console.error('Error fetching user data:', error);
-      alert('Failed to fetch user information');
+      console.error('Send message error:', error);
+      showNotification('Failed to send message', 'error');
     }
   };
 
-  const renderView = () => {
-    switch (view) {
-      case 'login':
-        return (
-          <div id="login-container" className="container">
-            <h2>Login</h2>
-            <input id="login-username" placeholder="Username" />
-            <input id="login-password" type="password" placeholder="Password" />
-            <button onClick={() => {
-              const username = document.getElementById('login-username').value;
-              const password = document.getElementById('login-password').value;
-              login(username, password);
-            }}>Login</button>
-            <p>Don't have an account? <span className="link" onClick={() => setView('register')}>Register</span></p>
-          </div>
-        );
-      case 'register':
-        return (
-          <div id="register-container" className="container">
-            <h2>Register</h2>
-            <input id="register-username" placeholder="Username" />
-            <input id="register-password" type="password" placeholder="Password" />
-            <input id="register-email" type="email" placeholder="Email" />
-            <textarea id="register-bio" placeholder="Bio"></textarea>
-            <button onClick={() => {
-              const username = document.getElementById('register-username').value;
-              const password = document.getElementById('register-password').value;
-              const email = document.getElementById('register-email').value;
-              const bio = document.getElementById('register-bio').value;
-              register(username, password, email, bio);
-            }}>Register</button>
-            <p>Already have an account? <span className="link" onClick={() => setView('login')}>Login</span></p>
-          </div>
-        );
-        case 'home':
-          return (
-            <div id="home-container">
-              <h2>Welcome, {currentUser}</h2>
-              <p>Points: {points}</p>
-              <div className="add-friend-section">
-                <input
-                  type="text"
-                  placeholder="Enter username to add friend"
-                  value={newFriendUsername}
-                  onChange={(e) => setNewFriendUsername(e.target.value)}
-                  disabled={isLoading}
-                />
-                <button 
-                  onClick={() => sendFriendRequest(newFriendUsername)}
-                  disabled={isLoading || !newFriendUsername.trim()}
-                >
-                  {isLoading ? 'Sending...' : 'Add Friend'}
-                </button>
-              </div>
-              <button onClick={() => setView('groupChat')}>Join Group Chat</button>
-              <button onClick={() => setView('browserHistory')}>Show Browser History</button>
-              <button onClick={() => setView('moments')}>Moments</button>
-              <button onClick={logout}>Logout</button>
-              <h3>Friends</h3>
-              <ul className="friend-list">
-                {friends.length > 0 ? friends.map((friend, index) => (
-                  <li key={`${friend}-${index}`} className="friend-item">
-                    {friend}
-                    <div>
-                      <button className="chat-button" onClick={() => openPrivateChat(friend)}>Chat</button>
-                      <button onClick={() => openUserPopup(friend)}>View Info</button>
-                    </div>
-                  </li>
-                )) : <li>No friends yet</li>}
-              </ul>
-              <h3>Friend Requests</h3>
-              <ul>
-                {friendRequests.length > 0 ? friendRequests.map((request, index) => (
-                  <li key={`${request}-${index}`}>
-                    {request}
-                    <button onClick={() => acceptFriendRequest(request)}>Accept</button>
-                  </li>
-                )) : <li>No friend requests</li>}
-              </ul>
-            </div>
-          );
-        case 'groupChat':
-          return (
-            <div id="group-chat-container" className="chat-container">
-              <h2>Group Chat</h2>
-              <ChatInterface currentUser={currentUser} isGroup={true} />
-              <button onClick={() => setView('home')}>Back to Home</button>
-            </div>
-          );
-        case 'privateChat':
-          return (
-            <div id="private-chat-container" className="chat-container">
-              <h2>Private Chat with {privateChatUser}</h2>
-              <ChatInterface currentUser={currentUser} isGroup={false} recipient={privateChatUser} />
-              <button onClick={() => setView('home')}>Back to Home</button>
-            </div>
-          );
-        case 'browserHistory':
-          return (
-            <div id="browser-history-container">
-              <BrowserHistory />
-              <button onClick={() => setView('home')}>Back to Home</button>
-            </div>
-          );
-        case 'moments':
-          return (
-            <div id="moments-container">
-              <h2>Moments</h2>
-              <div>
-                <textarea
-                  value={newMoment.content}
-                  onChange={(e) => setNewMoment({...newMoment, content: e.target.value})}
-                  placeholder="What's on your mind?"
-                />
-                <select
-                  value={newMoment.visibility}
-                  onChange={(e) => setNewMoment({...newMoment, visibility: e.target.value})}
-                >
-                  <option value="public">Public</option>
-                  <option value="friends">Friends Only</option>
-                </select>
-                <input
-                  type="file"
-                  onChange={(e) => setNewMoment({...newMoment, image: e.target.files[0]})}
-                />
-                <button onClick={createMoment}>Post</button>
-              </div>
-              <div>
-                {moments.map((moment) => (
-                  <div key={moment._id}>
-                    <p>{moment.user.username}</p>
-                    <p>{moment.content}</p>
-                    {moment.image && <img src={`${API_URL}${moment.image}`} alt="Moment" />}
-                    <p>{new Date(moment.createdAt).toLocaleString()}</p>
-                  </div>
-                ))}
-              </div>
-              <button onClick={() => setView('home')}>Back to Home</button>
-            </div>
-          );
-        default:
-          return <div>Invalid view</div>;
-      }
+  // Event listeners
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const cleanupFns = [
+      onChatMessage((msg) => {
+        // Handle chat message
+      }),
+      onPrivateMessage((msg) => {
+        // Handle private message
+      }),
+      onFriendAdded((data) => {
+        if (isMounted.current) {
+          setFriends(prev => Array.from(new Set([...prev, data])));
+        }
+      }),
+      onUpdatePoints((data) => {
+        if (isMounted.current) {
+          setPoints(typeof data === 'object' ? data.points : data);
+        }
+      }),
+      onFriendRequest((data) => {
+        if (isMounted.current && data.to === currentUser) {
+          setFriendRequests(prev => Array.from(new Set([...prev, data.from])));
+          showNotification(`New friend request from ${data.from}`, 'info');
+        }
+      }),
+      onUpdateFriends(({ username, friends }) => {
+        if (isMounted.current && username === currentUser) {
+          setFriends(Array.from(new Set(friends)));
+        }
+      }),
+      onUpdateFriendRequests(({ username, friendRequests }) => {
+        if (isMounted.current && username === currentUser) {
+          setFriendRequests(Array.from(new Set(friendRequests)));
+        }
+      })
+    ];
+
+    // Initial data fetch
+    getFriends({ username: currentUser });
+    getFriendRequests({ username: currentUser });
+
+    return () => {
+      cleanupFns.forEach(cleanup => cleanup?.());
     };
+  }, [currentUser]);
+
+  // Render functions
+  const renderLogin = () => (
+    <div className="card login-container">
+      <h2>Login</h2>
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        handleLogin(formData.get('username'), formData.get('password'));
+      }}>
+        <div className="form-group">
+          <label htmlFor="username" className="form-label">Username</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            className="form-control"
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="password" className="form-label">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            className="form-control"
+            required
+          />
+        </div>
+        <button type="submit" className="btn btn-primary w-full" disabled={isLoading}>
+          {isLoading ? 'Logging in...' : 'Login'}
+        </button>
+      </form>
+      <p className="text-center mt-4">
+        Don't have an account?{' '}
+        <button
+          onClick={() => setView('register')}
+          className="text-primary hover:underline"
+        >
+          Register
+        </button>
+      </p>
+    </div>
+  );
+
+  const renderRegister = () => (
+    <div className="card register-container">
+      <h2>Register</h2>
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        handleRegister({
+          username: formData.get('username'),
+          password: formData.get('password'),
+          email: formData.get('email'),
+          bio: formData.get('bio')
+        });
+      }}>
+        <div className="form-group">
+          <label htmlFor="reg-username" className="form-label">Username</label>
+          <input
+            type="text"
+            id="reg-username"
+            name="username"
+            className="form-control"
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="reg-password" className="form-label">Password</label>
+          <input
+            type="password"
+            id="reg-password"
+            name="password"
+            className="form-control"
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="email" className="form-label">Email</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            className="form-control"
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="bio" className="form-label">Bio</label>
+          <textarea
+            id="bio"
+            name="bio"
+            className="form-control"
+            rows="3"
+          ></textarea>
+        </div>
+        <button type="submit" className="btn btn-primary w-full" disabled={isLoading}>
+          {isLoading ? 'Registering...' : 'Register'}
+        </button>
+      </form>
+      <p className="text-center mt-4">
+        Already have an account?{' '}
+        <button
+          onClick={() => setView('login')}
+          className="text-primary hover:underline"
+        >
+          Login
+        </button>
+      </p>
+    </div>
+  );
+
+  const renderHome = () => (
+    <div className="home-container">
+      <div className="card user-info">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2>Welcome, {currentUser}</h2>
+            <p className="points">Points: {points}</p>
+          </div>
+          <button onClick={handleLogout} className="btn btn-secondary">
+            Logout
+          </button>
+        </div>
+      </div>
+
+      <div className="card friend-section">
+        <h3>Add Friend</h3>
+        <div className="add-friend-form">
+          <input
+            type="text"
+            value={newFriendUsername}
+            onChange={(e) => setNewFriendUsername(e.target.value)}
+            placeholder="Enter username"
+            className="form-control"
+          />
+          <button
+            onClick={() => handleSendFriendRequest(newFriendUsername)}
+            className="btn btn-primary"
+            disabled={isLoading || !newFriendUsername.trim()}
+          >
+            Add Friend
+          </button>
+        </div>
+      </div>
+
+      {/* 功能区 */}
+      <div className="card">
+        <h3>功能区</h3>
+        <div className="flex flex-wrap gap-4">
+          <button
+            onClick={() => setView('groupChat')}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            <Users size={20} />
+            群聊
+          </button>
+          <button
+            onClick={() => setView('moments')}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            <BookOpen size={20} />
+            朋友圈
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="card">
+          <h3>Friends</h3>
+          <div className="friend-list">
+            {friends.length > 0 ? (
+              friends.map((friend, index) => (
+                <div key={`${friend}-${index}`} className="friend-item">
+                  <span>{friend}</span>
+                  <div className="friend-actions">
+                    <button
+                      onClick={() => {
+                        setPrivateChatUser(friend);
+                        setView('privateChat');
+                        loadPrivateChat({ from: currentUser, to: friend });
+                      }}
+                      className="btn btn-secondary"
+                    >
+                      Chat
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p>No friends yet</p>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <h3>Friend Requests</h3>
+          <div className="friend-requests">
+            {friendRequests.length > 0 ? (
+              friendRequests.map((request, index) => (
+                <div key={`${request}-${index}`} className="friend-request-item">
+                  <span>{request}</span>
+                  <button
+                    onClick={() => handleAcceptFriendRequest(request)}
+                    className="btn btn-primary"
+                  >
+                    Accept
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p>No friend requests</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderChat = () => (
+    <ChatInterface
+      currentUser={currentUser}
+      isGroup={!privateChatUser}
+      recipient={privateChatUser}
+      sendMessage={handleSendMessage}
+      onBack={() => {
+        setPrivateChatUser(null);
+        setView('home');
+      }}
+    />
+  );
+
+  const renderMoments = () => (
+    <div className="moments-view">
+      <Moments
+        currentUser={currentUser}
+        friends={friends}
+        onBack={() => setView('home')}
+        showNotification={showNotification}
+      />
+    </div>
+  );
+
+  // Main render
+  return (
+    <div className="app">
+      {notification.show && (
+        <div className={`notification ${notification.type}`}>
+          {notification.type === 'error' ? (
+            <AlertCircle className="w-5 h-5" />
+          ) : (
+            <CheckCircle className="w-5 h-5" />
+          )}
+          <span>{notification.message}</span>
+        </div>
+      )}
+
+      {(() => {
+        switch (view) {
+          case 'login':
+            return renderLogin();
+            case 'register':
+              return renderRegister();
+            case 'home':
+              return renderHome();
+            case 'privateChat':
+              return renderChat();
+            case 'groupChat':
+              return (
+                <div className="chat-view">
+                  <ChatInterface
+                    currentUser={currentUser}
+                    isGroup={true}
+                    sendMessage={handleSendMessage}
+                    onBack={() => setView('home')}
+                  />
+                </div>
+              );
+            case 'moments':
+              return renderMoments();
+            default:
+              return null;
+          }
+        })()}
   
-    return (
-      <div className="app">
-        {renderView()}
-        {userPopup.show && (
-          <div className="popup">
-            <div className="popup-content">
-              <span className="close-popup" onClick={() => setUserPopup({ show: false, user: null })}>×</span>
-              <h2>User Info</h2>
-              <p>Username: {userPopup.user.username}</p>
-              <p>Email: {userPopup.user.email}</p>
-              <p>Bio: {userPopup.user.bio}</p>
-              {!friends.includes(userPopup.user.username) && (
-                <button onClick={() => sendFriendRequest(userPopup.user.username)}>
-                  {friendRequests.includes(userPopup.user.username) ? 'Friend Request Sent' : 'Add Friend'}
-                </button>
-              )}
+        <ThemeSwitcher />
+  
+        {userPopup.show && userPopup.user && (
+          <div className="popup-overlay">
+            <div className="popup">
+              <div className="popup-content">
+                <span 
+                  className="close-popup" 
+                  onClick={() => setUserPopup({ show: false, user: null })}
+                  aria-label="Close popup"
+                >
+                  ×
+                </span>
+                <h2>User Info</h2>
+                <div className="user-info">
+                  <p><strong>Username:</strong> {userPopup.user.username}</p>
+                  <p><strong>Email:</strong> {userPopup.user.email}</p>
+                  <p><strong>Bio:</strong> {userPopup.user.bio}</p>
+                </div>
+                {!friends.includes(userPopup.user.username) && (
+                  <button 
+                    className="btn btn-primary mt-4"
+                    onClick={() => handleSendFriendRequest(userPopup.user.username)}
+                    disabled={friendRequests.includes(userPopup.user.username)}
+                  >
+                    {friendRequests.includes(userPopup.user.username) 
+                      ? 'Friend Request Sent' 
+                      : 'Add Friend'
+                    }
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

@@ -5,206 +5,412 @@ const io = require('socket.io-client');
 const betterSqlite3 = require('better-sqlite3');
 const os = require('os');
 const fetch = require('node-fetch');
+const log = require('electron-log');
+const fs = require('fs');
 
-let mainWindow;
-let chatWindow;
-let socket;
+// 日志配置
+function setupLogging() {
+  const userDataPath = app.getPath('userData');
+  const logPath = path.join(userDataPath, 'logs');
 
-function connectSocket() {
-  socket = io('http://localhost:3000');
+  if (!fs.existsSync(logPath)) {
+    fs.mkdirSync(logPath, { recursive: true });
+  }
 
-  socket.on('connect', () => {
-    console.log('Connected to server');
+  log.transports.file.level = 'debug';
+  log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}] [{level}] {text}';
+  log.transports.file.maxSize = 5 * 1024 * 1024;
+  log.transports.file.file = path.join(logPath, 'main.log');
+
+  log.transports.console.level = 'debug';
+  log.transports.console.format = '[{level}] {text}';
+
+  return log;
+}
+
+// 初始化日志
+const logger = setupLogging();
+logger.info('Application Starting...');
+
+// 全局变量
+let mainWindow = null;
+let chatWindow = null;
+let socket = null;
+
+// 配置常量
+const WINDOW_CONFIG = {
+  main: {
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    show: false
+  },
+  chat: {
+    width: 400,
+    height: 600,
+    minWidth: 300,
+    minHeight: 400,
+    show: false
+  }
+};
+
+const API_URLS = {
+  development: {
+    api: 'http://localhost:3002',
+    frontend: 'http://localhost:3001'
+  },
+  production: {
+    api: process.env.REACT_APP_API_URL,
+    frontend: `file://${path.join(__dirname, 'build', 'index.html')}`
+  }
+};
+
+// 工具函数
+const debounce = (func, wait) => {
+  let timeout;
+  return (...args) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
+
+// Socket.IO 连接管理
+function setupSocket() {
+  const apiUrl = isDev ? API_URLS.development.api : API_URLS.production.api;
+  
+  logger.info(`Connecting to Socket.IO server at ${apiUrl}`);
+  
+  socket = io(apiUrl, {
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    timeout: 10000,
+    transports: ['websocket', 'polling']
   });
 
-  const events = ['chat message', 'private message', 'friend added', 'update points', 
-                  'update friends', 'user connected', 'user disconnected', 
-                  'private chat history', 'friend request', 'update friend requests'];
+  socket.on('connect', () => {
+    logger.info('Connected to Socket.IO server');
+    mainWindow?.webContents?.send('server-connection-status', { connected: true });
+  });
+
+  socket.on('connect_error', (error) => {
+    logger.error('Socket connection error:', error);
+    mainWindow?.webContents?.send('server-connection-status', { 
+      connected: false, 
+      error: error.message 
+    });
+  });
+
+  socket.on('disconnect', (reason) => {
+    logger.info('Disconnected from server:', reason);
+  });
+
+  const events = [
+    'chat message', 'private message', 'friend added', 
+    'update points', 'update friends', 'user connected', 
+    'user disconnected', 'private chat history', 
+    'friend request', 'update friend requests'
+  ];
 
   events.forEach(event => {
     socket.on(event, (data) => {
-      console.log(`Received ${event} event:`, data);
+      logger.info(`Received ${event} event:`, data);
       sendToAllWindows(event, data);
     });
   });
+
+  return socket;
 }
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+// 窗口创建函数
+function createWindowWithConfig(config) {
+  return new BrowserWindow({
+    ...config,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      preload: path.join(__dirname, 'preload.js')
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+      devTools: isDev,
+      sandbox: false,
+      webSecurity: true,
+      enableRemoteModule: false
     }
   });
+}
 
-  chatWindow = new BrowserWindow({
-    width: 400,
-    height: 600,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      preload: path.join(__dirname, 'preload.js')
+async function loadWindow(window, isMainWindow = true) {
+  const url = isDev ? API_URLS.development.frontend : API_URLS.production.frontend;
+  
+  try {
+    await window.loadURL(url);
+    logger.info(`Window loaded successfully: ${url}`);
+    
+    if (isMainWindow || isDev) {
+      window.show();
+      if (isDev) window.webContents.openDevTools();
     }
-  });
-
-  const startUrl = isDev 
-    ? 'http://localhost:3001' 
-    : `file://${path.join(__dirname, 'build', 'index.html')}`;
-
-  mainWindow.loadURL(startUrl);
-  chatWindow.loadURL(startUrl);
-
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
-    chatWindow.webContents.openDevTools();
+  } catch (error) {
+    logger.error('Failed to load window:', error);
+    throw error;
   }
+}
 
+// 创建主窗口
+async function createMainWindow() {
+  logger.info('Creating main window');
+  
+  mainWindow = createWindowWithConfig(WINDOW_CONFIG.main);
+  
   mainWindow.on('closed', () => {
+    logger.info('Main window closed');
     mainWindow = null;
   });
 
+  try {
+    await loadWindow(mainWindow);
+  } catch (error) {
+    logger.error('Failed to create main window:', error);
+    app.quit();
+  }
+
+  return mainWindow;
+}
+
+// 创建聊天窗口
+async function createChatWindow() {
+  logger.info('Creating chat window');
+  
+  chatWindow = createWindowWithConfig(WINDOW_CONFIG.chat);
+  
   chatWindow.on('closed', () => {
+    logger.info('Chat window closed');
     chatWindow = null;
   });
 
-  connectSocket();
+  try {
+    await loadWindow(chatWindow, false);
+  } catch (error) {
+    logger.error('Failed to create chat window:', error);
+  }
+
+  return chatWindow;
 }
 
-app.whenReady().then(createWindow);
+// API 请求处理
+const apiHandler = {
+  async getMoments(event, { username }) {
+    try {
+      const response = await fetch(
+        apiHandler.getApiUrl(`/moments?username=${username}`),
+        { method: 'GET' }
+      );
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      logger.error('Moments fetch error:', error);
+      throw error;
+    }
+  },
+
+  async createMoment(event, formData) {
+    try {
+      const response = await fetch(
+        apiHandler.getApiUrl('/moments'),
+        {
+          method: 'POST',
+          body: formData
+        }
+      );
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      logger.error('Create moment error:', error);
+      throw error;
+    }
+  },
+  async makeRequest(url, options) {
+    try {
+      const response = await fetch(url, options);
+      const data = await response.json();
+      return { ok: response.ok, data };
+    } catch (error) {
+      logger.error('API request failed:', error);
+      throw error;
+    }
+  },
+
+  getApiUrl(endpoint) {
+    return isDev ? `${API_URLS.development.api}${endpoint}` : `${API_URLS.production.api}${endpoint}`;
+  }
+};
+
+// IPC 事件处理
+const ipcHandlers = {
+  async login(event, { username, password }) {
+    try {
+      const { ok, data } = await apiHandler.makeRequest(
+        apiHandler.getApiUrl('/login'),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        }
+      );
+
+      if (ok) {
+        socket?.emit('login', { username });
+        return { success: true, message: 'Login successful', user: data.user };
+      }
+      return { success: false, message: data.message };
+    } catch (error) {
+      logger.error('Login error:', error);
+      return { success: false, message: 'Connection error during login' };
+    }
+  },
+
+  async register(event, userData) {
+    try {
+      const { ok, data } = await apiHandler.makeRequest(
+        apiHandler.getApiUrl('/register'),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(userData)
+        }
+      );
+      return { success: ok, message: data.message };
+    } catch (error) {
+      logger.error('Registration error:', error);
+      return { success: false, message: 'Connection error during registration' };
+    }
+  },
+
+  async getChromeHistory(event, limit = 100) {
+    try {
+      const username = os.userInfo().username;
+      const historyPath = path.join('C:', 'Users', username, 'AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Default', 'History');
+      
+      const db = new betterSqlite3(historyPath, { readonly: true });
+      const rows = db.prepare('SELECT url, title, last_visit_time FROM urls ORDER BY last_visit_time DESC LIMIT ?').all(limit);
+      db.close();
+
+      return rows.map(row => ({
+        url: row.url,
+        title: row.title,
+        lastVisit: new Date(row.last_visit_time / 1000).toISOString()
+      }));
+    } catch (error) {
+      logger.error('Chrome history query error:', error);
+      throw error;
+    }
+  },
+
+  async getUserInfo(event, username) {
+    try {
+      const { ok, data } = await apiHandler.makeRequest(
+        apiHandler.getApiUrl(`/user/${username}`),
+        { method: 'GET' }
+      );
+      
+      if (!ok) throw new Error('Failed to fetch user info');
+      return data;
+    } catch (error) {
+      logger.error('User info fetch error:', error);
+      throw error;
+    }
+  }
+};
+
+// Socket 事件转发
+const socketEvents = [
+  'get friends',
+  'get friend requests',
+  'chat message',
+  'private message',
+  'add friend',
+  'accept friend request',
+  'load private chat',
+  'logout',
+  'send friend request'
+];
+
+const debouncedEmit = debounce((event, data) => {
+  if (socket?.connected) {
+    socket.emit(event, data);
+    logger.info(`Emitted ${event}:`, data);
+  } else {
+    logger.warn(`Failed to emit ${event}: Socket not connected`);
+  }
+}, 300);
+
+socketEvents.forEach(event => {
+  ipcMain.on(event, (_, data) => {
+    if (['get friends', 'get friend requests'].includes(event)) {
+      debouncedEmit(event, data);
+    } else {
+      if (socket?.connected) {
+        socket.emit(event, data);
+        logger.info(`Emitted ${event}:`, data);
+      } else {
+        logger.warn(`Failed to emit ${event}: Socket not connected`);
+      }
+    }
+  });
+});
+
+// 注册 IPC 处理器
+Object.entries(ipcHandlers).forEach(([channel, handler]) => {
+  ipcMain.handle(channel, handler);
+});
+
+// 聊天窗口控制
+ipcMain.on('show-chat-window', (event, data) => {
+  chatWindow?.show();
+  chatWindow?.webContents.send('load-chat', data);
+});
+
+ipcMain.on('hide-chat-window', () => {
+  chatWindow?.hide();
+});
+
+// 应用程序初始化
+async function initializeApp() {
+  try {
+    await createMainWindow();
+    await createChatWindow();
+    setupSocket();
+    logger.info('Application initialized successfully');
+  } catch (error) {
+    logger.error('Failed to initialize application:', error);
+    app.quit();
+  }
+}
+
+// 应用程序事件
+app.on('ready', () => {
+  logger.info('App is ready');
+  initializeApp();
+});
 
 app.on('window-all-closed', () => {
+  logger.info('All windows closed');
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+  logger.info('App activated');
+  if (!mainWindow) {
+    initializeApp();
   }
 });
 
-ipcMain.handle('login', async (event, { username, password }) => {
-  try {
-    console.log('Login request:', { username, password });
-    const response = await fetch('http://localhost:3000/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    const result = await response.json();
-    console.log('Login response:', result);
-    if (response.ok) {
-      if (socket) socket.emit('login', { username });
-      return { success: true, message: 'Login successful' };
-    } else {
-      return { success: false, message: result.message };
-    }
-  } catch (error) {
-    console.error('Login error:', error);
-    return { success: false, message: 'An error occurred during login' };
-  }
+// 错误处理
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
 });
 
-ipcMain.handle('register', async (event, { username, password, email, bio }) => {
-  try {
-    console.log('Register request:', { username, email, bio });
-    const response = await fetch('http://localhost:3000/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, email, bio }),
-    });
-    const result = await response.json();
-    console.log('Register response:', result);
-    return { success: response.ok, message: result.message };
-  } catch (error) {
-    console.error('Registration error:', error);
-    return { success: false, message: 'An error occurred during registration' };
-  }
+process.on('unhandledRejection', (error) => {
+  logger.error('Unhandled Rejection:', error);
 });
-
-ipcMain.on('get friends', (event, data) => {
-  if (socket) socket.emit('get friends', data);
-});
-
-ipcMain.on('get friend requests', (event, data) => {
-  if (socket) socket.emit('get friend requests', data);
-});
-
-ipcMain.on('chat message', (event, data) => {
-  if (socket) socket.emit('chat message', data);
-});
-
-ipcMain.on('private message', (event, data) => {
-  if (socket) socket.emit('private message', data);
-});
-
-ipcMain.on('add friend', (event, data) => {
-  if (socket) socket.emit('add friend', data);
-});
-
-ipcMain.on('accept friend request', (event, data) => {
-  if (socket) socket.emit('accept friend request', data);
-});
-
-ipcMain.on('load private chat', (event, data) => {
-  if (socket) socket.emit('load private chat', data);
-});
-
-ipcMain.on('logout', (event, data) => {
-  if (socket) socket.emit('logout', data);
-});
-
-ipcMain.on('send friend request', (event, data) => {
-  console.log('Main process: Sending friend request', data);
-  if (socket) {
-    socket.emit('send friend request', data);
-  }
-});
-
-ipcMain.handle('get-chrome-history', async (event, limit = 100) => {
-  const username = os.userInfo().username;
-  const historyPath = path.join('C:', 'Users', username, 'AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Default', 'History');
-  
-  try {
-    const db = new betterSqlite3(historyPath, { readonly: true });
-    const query = `SELECT url, title, last_visit_time FROM urls ORDER BY last_visit_time DESC LIMIT ?`;
-    const rows = db.prepare(query).all(limit);
-    db.close();
-
-    return rows.map(row => ({
-      url: row.url,
-      title: row.title,
-      lastVisit: new Date(row.last_visit_time / 1000).toISOString()
-    }));
-  } catch (error) {
-    console.error('Error querying Chrome history:', error);
-    throw error;
-  }
-});
-
-ipcMain.handle('get user info', async (event, username) => {
-  try {
-    const response = await fetch(`http://localhost:3000/user/${username}`);
-    if (response.ok) {
-      return await response.json();
-    } else {
-      throw new Error('Failed to fetch user info');
-    }
-  } catch (error) {
-    console.error('Error fetching user info:', error);
-    throw error;
-  }
-});
-
-function sendToAllWindows(channel, ...args) {
-  const windows = BrowserWindow.getAllWindows();
-  windows.forEach(window => {
-    if (window.webContents) {
-      window.webContents.send(channel, ...args);
-    }
-  });
-}

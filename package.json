@@ -1,47 +1,73 @@
 {
   "name": "chat-app",
   "version": "1.0.0",
+  "homepage": "./",
   "description": "A chat application with browser history reading capability",
   "main": "main.js",
   "author": "Your Name <your@email.com>",
-  "scripts": {
-  "start": "react-scripts start",
-  "build": "react-scripts build",
-  "test": "react-scripts test",
-  "eject": "react-scripts eject",
-  "electron": "electron .",
-  "dev": "concurrently --kill-others \"cross-env PORT=3001 BROWSER=none npm start\" \"wait-on http://localhost:3001 && echo Launching Electron... && electron . || echo Electron failed to launch\"",
-  "electron-dev": "wait-on http://localhost:3001 --timeout 60000 && electron .",
-  "pack": "npm run build && electron-builder --dir",
-  "dist": "npm run build && electron-builder",
-  "postinstall": "electron-builder install-app-deps"
-},
+ "scripts": {
+    "start": "react-app-rewired start",
+    "build": "react-app-rewired build",
+    "test": "react-app-rewired test",
+    "eject": "react-scripts eject",
+    "electron": "cross-env DEBUG=electron:* electron .",
+    "electron:wait": "wait-on -l tcp:3001 && npm run electron",
+    "dev": "concurrently -k \"cross-env BROWSER=none npm start\" \"npm run electron:wait\"",
+    "start-all": "concurrently \"cross-env PORT=3002 node server.js\" \"npm run dev\""
+  },
   "dependencies": {
-    "axios": "^1.7.7",
+    "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^7.6.2",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
+    "debug": "^4.3.4",
+    "electron-is-dev": "^2.0.0",
+    "electron-log": "^4.4.8",
     "express": "^4.19.2",
     "lucide-react": "^0.428.0",
     "mongoose": "^6.13.0",
     "multer": "^1.4.3",
     "node-fetch": "^2.6.1",
-    "path": "^0.12.7",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "socket.io": "^4.7.5",
     "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.0",
+    "@babel/preset-env": "^7.24.0",
+    "@babel/preset-react": "^7.23.3",
+    "assert": "^2.1.0",
+    "babel-loader": "^9.1.2",
+    "browserify-zlib": "^0.2.0",
+    "buffer": "^6.0.3",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "electron": "15.5.7",
-    "electron-builder": "^24.13.3",
-    "electron-is-dev": "^2.0.0",
+    "crypto-browserify": "^3.12.1",
+    "css-loader": "^6.8.1",
+    "customize-cra": "^1.0.0",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
     "electron-packager": "^17.1.2",
+    "html-webpack-plugin": "^5.6.0",
+    "https-browserify": "^1.0.0",
+    "node-loader": "^2.0.0",
+    "nodemon": "^3.1.0",
+    "os-browserify": "^0.3.0",
+    "path-browserify": "^1.0.1",
+    "process": "^0.11.10",
+    "react-app-rewired": "^2.2.1",
     "react-scripts": "^5.0.1",
-    "wait-on": "^5.3.0"
+    "stream-browserify": "^3.0.0",
+    "stream-http": "^3.2.0",
+    "style-loader": "^3.3.3",
+    "url": "^0.11.4",
+    "util": "^0.12.5",
+    "wait-on": "^7.2.0",
+    "webpack": "^5.90.3",
+    "webpack-dev-server": "^4.15.1"
   },
   "build": {
     "appId": "com.yourcompany.chatapp",
@@ -86,11 +112,7 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false
-    },
-    "electronDownload": {
-      "mirror": "https://npmmirror.com/mirrors/electron/"
-    },
-    "electronVersion": "15.5.7"
+    }
   },
   "browserslist": {
     "production": [
@@ -101,7 +123,41 @@
     "development": [
       "last 1 chrome version",
       "last 1 firefox version",
-      "last 1 safari version"
+      "last 1 safari version",
+      "last 1 electron version"
     ]
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ],
+    "rules": {
+      "no-restricted-globals": "off",
+      "no-new-func": "off",
+      "no-undef": "off",
+      "no-redeclare": "off",
+      "no-unused-vars": [
+        "warn",
+        {
+          "varsIgnorePattern": "^global(This)?$",
+          "args": "none"
+        }
+      ]
+    },
+    "globals": {
+      "window": true,
+      "global": true,
+      "process": true,
+      "Buffer": true,
+      "self": true
+    },
+    "env": {
+      "browser": true,
+      "node": true,
+      "es2020": true
+    },
+    "parserOptions": {
+      "ecmaVersion": 2020
+    }
   }
 }

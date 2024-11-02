@@ -1,0 +1,182 @@
+:root {
+  /* 默认主题 */
+  --theme-primary: #0084ff;
+  --theme-primary-light: #3399ff;
+  --theme-primary-dark: #0066cc;
+  --theme-secondary: #e8f5ff;
+  --theme-background: #f5f7fa;
+  --theme-surface: #ffffff;
+  --theme-text-primary: #2c3e50;
+  --theme-text-secondary: #666666;
+  --theme-border: #e1e4e8;
+  --theme-shadow: rgba(0, 0, 0, 0.1);
+  --theme-hover: rgba(0, 0, 0, 0.05);
+  --border-radius: 8px;
+  --transition: all 0.3s ease;
+}
+
+/* 主题变体 */
+[data-theme="ocean"] {
+  --theme-primary: #00b4d8;
+  --theme-primary-light: #33c5e2;
+  --theme-primary-dark: #0090ad;
+  --theme-secondary: #e0f7fa;
+  --theme-background: #f0f9ff;
+}
+
+[data-theme="forest"] {
+  --theme-primary: #2ecc71;
+  --theme-primary-light: #58d68d;
+  --theme-primary-dark: #27ae60;
+  --theme-secondary: #e8f5e9;
+  --theme-background: #f1f8e9;
+}
+
+[data-theme="sunset"] {
+  --theme-primary: #ff7043;
+  --theme-primary-light: #ff8a65;
+  --theme-primary-dark: #f4511e;
+  --theme-secondary: #fbe9e7;
+  --theme-background: #fff3e0;
+}
+
+[data-theme="dark"] {
+  --theme-primary: #60a5fa;
+  --theme-primary-light: #93c5fd;
+  --theme-primary-dark: #3b82f6;
+  --theme-secondary: #1e293b;
+  --theme-background: #0f172a;
+  --theme-surface: #1e293b;
+  --theme-text-primary: #e2e8f0;
+  --theme-text-secondary: #94a3b8;
+  --theme-border: #334155;
+  --theme-shadow: rgba(0, 0, 0, 0.3);
+  --theme-hover: rgba(255, 255, 255, 0.05);
+}
+
+/* 保留原有样式但使用CSS变量 */
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: var(--theme-background);
+  color: var(--theme-text-primary);
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 400px;
+  margin: 40px auto;
+  padding: 20px;
+  border-radius: var(--border-radius);
+  background-color: var(--theme-surface);
+  box-shadow: 0 2px 4px var(--theme-shadow);
+}
+
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.popup {
+  background-color: var(--theme-surface);
+  padding: 20px;
+  border-radius: var(--border-radius);
+  box-shadow: 0 2px 10px var(--theme-shadow);
+  max-width: 500px;
+  width: 90%;
+  color: var(--theme-text-primary);
+}
+
+.friend-list {
+  list-style: none;
+  padding: 0;
+}
+
+.friend-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid var(--theme-border);
+  transition: var(--transition);
+}
+
+.friend-item:hover {
+  background-color: var(--theme-hover);
+}
+
+/* 更新按钮样式 */
+button {
+  padding: 8px 16px;
+  border-radius: var(--border-radius);
+  border: none;
+  background-color: var(--theme-primary);
+  color: white;
+  cursor: pointer;
+  margin: 5px;
+  transition: var(--transition);
+}
+
+button:hover {
+  background-color: var(--theme-primary-light);
+}
+
+button:disabled {
+  background-color: var(--theme-text-secondary);
+  cursor: not-allowed;
+}
+
+/* 更新输入框样式 */
+input, textarea, select {
+  width: 100%;
+  padding: 8px;
+  margin: 5px 0;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--border-radius);
+  background-color: var(--theme-surface);
+  color: var(--theme-text-primary);
+  transition: var(--transition);
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--theme-primary);
+  box-shadow: 0 0 0 2px var(--theme-primary-light);
+}
+
+.chat-container {
+  max-width: 800px;
+  margin: 0 auto;
+  background-color: var(--theme-surface);
+  border-radius: var(--border-radius);
+  box-shadow: 0 2px 8px var(--theme-shadow);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 200px);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .container {
+    width: 90%;
+    margin: 20px auto;
+  }
+  
+  .popup {
+    width: 95%;
+    margin: 10px;
+  }
+
+  .chat-container {
+    height: calc(100vh - 140px);
+  }
+}
